@@ -1,6 +1,8 @@
 <RCC>
     <qresource prefix="/icon">
-        <file>images/locker1.png</file>
+        <file>images/AESIcon1.png</file>
         <file>images/locker2.png</file>
+        <file>images/locker1.png</file>
+        <file>images/AESIcon2.ico</file>
     </qresource>
 </RCC>
