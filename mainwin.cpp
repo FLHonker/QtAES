@@ -3,6 +3,7 @@
 #include <QByteArray>
 #include <QDebug>
 #include <QMessageBox>
+#include <QFileDialog>
 
 MainWin::MainWin(QWidget *parent) :
     QMainWindow(parent),
@@ -61,22 +62,55 @@ void MainWin::getKey()
     QStr2Char(keyStr, key);
 }
 
-// 从ui->textEdit获取文本并转化为char*；为szDataInszDataOut,szHex分配合适大小的内存空间;并把内容存入szDataIn。
-void MainWin::getInputText(char* szData)
+// import file
+void MainWin::on_Btn_file_clicked()
 {
-    QString inputStr = ui->textEdit_input->document()->toPlainText();  //从textEdit控件中获取文本
-    QStr2Char(inputStr, szData);
-    inputLen = strlen(szDataIn);   //inputStr.length() + 1;
+    fileName = QFileDialog::getOpenFileName(this, tr("Open file"), ".", tr("All Files (*.*)"));  //选择路径
+    if(fileName.length() == 0)
+    {
+        QMessageBox::information(NULL, tr("Path"), tr("You didn't select any files."));
+        return;
+    }
+    ui->lineEdit_input->setText(fileName);
+    inFile = new QFile(fileName);
+    outFile = new QFile(fileName + ".aes");
+}
 
-    /*
-    szDataIn = new char[len];
-    memset(szDataIn,0,len-1);
-    szDataOut = new char[len];
-    memset(szDataOut,0,len-1);
-    szHex = new char[2*len];
-    memset(szHex,0,2*len-1);
-    strcpy(szDataIn, input);
-    */
+bool MainWin::openFiles()
+{
+    if(!inFile->open(QFile::ReadOnly))
+    {
+        QMessageBox::warning(this, tr("Warning"), tr("Can't open the infile."));
+        return false;
+    }
+    if(!outFile->open(QFile::WriteOnly | QFile::Append))   //不存在则创建文件
+    {
+        QMessageBox::warning(this, tr("Warning"), tr("Can't open the outfile."));
+        return false;
+    }
+
+    return true;
+}
+
+bool MainWin::readFile(char* buffer)
+{
+    memset(buffer, 0, sizeof(buffer)*4);  //读之前先清空buffer
+    qint64 len = 0;
+    if(inFile->atEnd())
+    {
+        inFile->close();
+        return false;
+    }
+    else
+        len = inFile->read(buffer, MAX_SIZE);
+    if(len == -1)
+        return false;
+    return true;
+}
+
+void MainWin::writeFile(char* buffer)
+{
+    outFile->write(buffer, sizeof(buffer));
 }
 
 //Function to convert unsigned char to string of length 2
@@ -135,20 +169,6 @@ void MainWin::HexStr2CharStr(char const* pszHexStr, unsigned char* pucCharStr, i
     }
 }
 
-int MainWin::hexcharToInt(char c)
-{
-    if (c >= '0' && c <= '9') return (c - '0');
-    if (c >= 'A' && c <= 'F') return (c - 'A' + 10);
-    if (c >= 'a' && c <= 'f') return (c - 'a' + 10);
-    return 0;
-}
-
-void MainWin::hexstringToBytes(char* hexstring,char* bytes,int hexlength)
-{
-    for (int i=0 ; i <hexlength ; i+=2)
-        *bytes++ = (char) ((hexcharToInt(hexstring[i]) << 4) | hexcharToInt(hexstring[i+1]));
-}
-
 // comboBox_keyLen中的选项触发的槽函数,保证数据块长度大于密钥；并设置key length
 void MainWin::on_comboBox_keyLen_currentIndexChanged(int index)
 {
@@ -180,53 +200,64 @@ void MainWin::on_comboBox_blockLen_currentTextChanged(const QString &arg1)
 // 清空input框，为新的输入做准备
 void MainWin::on_Btn_clear_clicked()
 {
-    ui->textEdit_input->clear();
+    ui->lineEdit_input->clear();
 }
 
 // 加密
 void MainWin::on_Btn_encrypt_clicked()
 {
-    CRijndael m_Rijndael;         //AES实现对象
-    ui->textEdit_output->clear();       //清空output框
-    getInputText(szDataIn);
-    memset(szDataOut, 0, inputLen);
-    memset(szHex, 0, 2*inputLen);
-    qDebug()<<szDataIn<<strlen(szHex)<<" "<<blockSize<<" "<<strlen(szDataIn)<<endl;
-
-    try{
-        m_Rijndael.MakeKey(key,CRijndael::sm_chain0,keyLen,blockSize);
-        m_Rijndael.Encrypt(szDataIn,szDataOut,strlen(szDataIn),iMode);
-        //qDebug()<<"szDataOut:"<<szDataOut<<endl;
-
-        CharStr2HexStr((unsigned char*)szDataOut,szHex,strlen(szDataOut));
-        QString output(szHex);
-        ui->textEdit_output->setText(output);
-    } catch (QString exception) {
-        QMessageBox::warning(this,tr("Warning"),exception);
+    if(!openFiles())    //打开文件
+    {
+        return;
     }
+    CRijndael m_Rijndael;         //AES实现对象
+    ui->lineEdit_output->clear();       //清空output框
+    while(readFile(szDataIn))   //读取文件至末尾
+    {
+        memset(szDataOut, 0, inputLen);
+        memset(szHex, 0, 2*inputLen);
+        qDebug()<<szDataIn<<strlen(szHex)<<" "<<blockSize<<" "<<strlen(szDataIn)<<endl;
+
+        try{
+            m_Rijndael.MakeKey(key,CRijndael::sm_chain0,keyLen,blockSize);
+            m_Rijndael.Encrypt(szDataIn,szDataOut,strlen(szDataIn),iMode);
+            //qDebug()<<"szDataOut:"<<szDataOut<<endl;
+            CharStr2HexStr((unsigned char*)szDataOut,szHex,strlen(szDataOut));
+            writeFile(szHex);    //将16进制字符缓冲区写入文件
+        } catch (QString exception) {
+            QMessageBox::warning(this,tr("Warning"),exception);
+        }
+    }
+    outFile->close();
+    ui->lineEdit_output->setText(fileName + ".aes");  //output框显示输出文件
 }
 
 // 解密
 void MainWin::on_Btn_decrypt_clicked()
 {
-    CRijndael m_Rijndael;         //AES实现对象
-    ui->textEdit_output->clear();    //清空output框
-    memset(szHex, 0, MAX_SIZE * 2);
-    getInputText(szHex);
-    memset(szDataIn, 0, inputLen);
-    memset(szDataOut, 0, inputLen);
-    //hexstringToBytes(szHex, szDataIn, strlen(szHex));
-    HexStr2CharStr(szHex,(unsigned char*)szDataIn,strlen(szHex));   //将16进制转化为字符串
-    qDebug()<<szHex<<endl<<"Hex2Char:"<<szDataIn<<endl;
-
-    try{
-        m_Rijndael.MakeKey(key,CRijndael::sm_chain0,keyLen,blockSize);
-        m_Rijndael.Decrypt(szDataIn,szDataOut,strlen(szDataIn),iMode);
-        //m_Rijndael.Decrypt(szDataOut,szDataIn,strlen(szDataOut),iMode);
-
-        QString output(szDataOut);
-        ui->textEdit_output->setText(output);
-    } catch (QString exception) {
-        QMessageBox::warning(this,tr("Warning"),exception);
+    if(!openFiles())  //打开文件
+    {
+        return;
     }
+    CRijndael m_Rijndael;         //AES实现对象
+    ui->lineEdit_output->clear();    //清空output框
+   while(readFile(szHex))
+   {
+       memset(szDataIn, 0, inputLen);
+       memset(szDataOut, 0, inputLen);
+       HexStr2CharStr(szHex,(unsigned char*)szDataIn,strlen(szHex));   //将16进制转化为字符串
+       //qDebug()<<szHex<<endl<<"Hex2Char:"<<szDataIn<<endl;
+
+       try{
+           m_Rijndael.MakeKey(key,CRijndael::sm_chain0,keyLen,blockSize);
+           m_Rijndael.Decrypt(szDataIn,szDataOut,strlen(szDataIn),iMode);
+
+           writeFile(szDataOut);
+       } catch (QString exception) {
+           QMessageBox::warning(this,tr("Warning"),exception);
+       }
+   }
+   outFile->close();
+   fileName.remove(".aes");
+   ui->lineEdit_output->setText(fileName); //output框显示输出文件
 }

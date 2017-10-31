@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>480</width>
-    <height>427</height>
+    <height>298</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -211,7 +211,7 @@
     <property name="geometry">
      <rect>
       <x>21</x>
-      <y>141</y>
+      <y>140</y>
       <width>36</width>
       <height>16</height>
      </rect>
@@ -224,7 +224,7 @@
     <property name="geometry">
      <rect>
       <x>20</x>
-      <y>260</y>
+      <y>190</y>
       <width>41</width>
       <height>16</height>
      </rect>
@@ -244,47 +244,6 @@
     </property>
     <property name="title">
      <string>AES</string>
-    </property>
-   </widget>
-   <widget class="QTextEdit" name="textEdit_output">
-    <property name="geometry">
-     <rect>
-      <x>20</x>
-      <y>281</y>
-      <width>439</width>
-      <height>89</height>
-     </rect>
-    </property>
-    <property name="focusPolicy">
-     <enum>Qt::StrongFocus</enum>
-    </property>
-    <property name="horizontalScrollBarPolicy">
-     <enum>Qt::ScrollBarAlwaysOff</enum>
-    </property>
-    <property name="readOnly">
-     <bool>true</bool>
-    </property>
-    <property name="placeholderText">
-     <string/>
-    </property>
-   </widget>
-   <widget class="QTextEdit" name="textEdit_input">
-    <property name="geometry">
-     <rect>
-      <x>21</x>
-      <y>159</y>
-      <width>439</width>
-      <height>91</height>
-     </rect>
-    </property>
-    <property name="focusPolicy">
-     <enum>Qt::StrongFocus</enum>
-    </property>
-    <property name="horizontalScrollBarPolicy">
-     <enum>Qt::ScrollBarAlwaysOff</enum>
-    </property>
-    <property name="placeholderText">
-     <string>Please input your text...</string>
     </property>
    </widget>
    <widget class="QLabel" name="label_blockLen">
@@ -328,22 +287,69 @@
      </property>
     </item>
    </widget>
-   <widget class="QPushButton" name="Btn_clear">
+   <widget class="QLabel" name="label_2">
     <property name="geometry">
      <rect>
-      <x>400</x>
-      <y>130</y>
-      <width>61</width>
+      <x>160</x>
+      <y>220</y>
+      <width>81</width>
+      <height>21</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>change chars:</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label_percentage">
+    <property name="geometry">
+     <rect>
+      <x>240</x>
+      <y>220</y>
+      <width>51</width>
+      <height>21</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>0%</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="Btn_file">
+    <property name="geometry">
+     <rect>
+      <x>380</x>
+      <y>140</y>
+      <width>81</width>
       <height>23</height>
      </rect>
     </property>
     <property name="text">
-     <string>Clear</string>
+     <string>Import file</string>
+    </property>
+   </widget>
+   <widget class="QLineEdit" name="lineEdit_input">
+    <property name="geometry">
+     <rect>
+      <x>62</x>
+      <y>140</y>
+      <width>311</width>
+      <height>20</height>
+     </rect>
+    </property>
+   </widget>
+   <widget class="QLineEdit" name="lineEdit_output">
+    <property name="geometry">
+     <rect>
+      <x>60</x>
+      <y>190</y>
+      <width>311</width>
+      <height>20</height>
+     </rect>
+    </property>
+    <property name="readOnly">
+     <bool>true</bool>
     </property>
    </widget>
    <zorder>groupBox_settings</zorder>
-   <zorder>textEdit_output</zorder>
-   <zorder>textEdit_input</zorder>
    <zorder>groupBox</zorder>
    <zorder>label_keyLen</zorder>
    <zorder>label_mode</zorder>
@@ -357,7 +363,11 @@
    <zorder>label</zorder>
    <zorder>label_blockLen</zorder>
    <zorder>comboBox_blockLen</zorder>
-   <zorder>Btn_clear</zorder>
+   <zorder>label_2</zorder>
+   <zorder>label_percentage</zorder>
+   <zorder>Btn_file</zorder>
+   <zorder>lineEdit_input</zorder>
+   <zorder>lineEdit_output</zorder>
   </widget>
   <widget class="QMenuBar" name="menuBar">
    <property name="geometry">
