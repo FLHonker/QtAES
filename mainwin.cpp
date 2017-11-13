@@ -4,6 +4,7 @@
 #include <QDebug>
 #include <QMessageBox>
 #include <QFileDialog>
+using namespace std;
 
 MainWin::MainWin(QWidget *parent) :
     QMainWindow(parent),
@@ -13,11 +14,16 @@ MainWin::MainWin(QWidget *parent) :
     keyLen = 16;
     blockSize = 16;
     iMode = 0;
-    inputLen = 0;
-    memset(key, 0, sizeof(key)*4);
-    memset(szDataIn, 0, MAX_SIZE);
-    memset(szDataOut, 0, MAX_SIZE);
-    memset(szHex, 0, MAX_SIZE*2);
+    memset(key, 0, 50);
+    ui->rBtn_compare->setChecked(false);
+    ui->groupBox_compare->hide();
+    ui->label_file1->hide();
+    ui->label_file2->hide();
+    ui->lineEdit_file1->hide();
+    ui->lineEdit_file2->hide();
+    ui->Btn_compare->hide();
+    ui->label_change->hide();
+    ui->label_percentage->hide();
 }
 
 MainWin::~MainWin()
@@ -72,101 +78,14 @@ void MainWin::on_Btn_file_clicked()
         return;
     }
     ui->lineEdit_input->setText(fileName);
-    inFile = new QFile(fileName);
-    outFile = new QFile(fileName + ".aes");
+    ui->lineEdit_output->clear();
 }
 
-bool MainWin::openFiles()
+// Save path
+void MainWin::on_Btn_save_clicked()
 {
-    if(!inFile->open(QFile::ReadOnly))
-    {
-        QMessageBox::warning(this, tr("Warning"), tr("Can't open the infile."));
-        return false;
-    }
-    if(!outFile->open(QFile::WriteOnly | QFile::Append))   //不存在则创建文件
-    {
-        QMessageBox::warning(this, tr("Warning"), tr("Can't open the outfile."));
-        return false;
-    }
-
-    return true;
-}
-
-bool MainWin::readFile(char* buffer)
-{
-    memset(buffer, 0, sizeof(buffer)*4);  //读之前先清空buffer
-    qint64 len = 0;
-    if(inFile->atEnd())
-    {
-        inFile->close();
-        return false;
-    }
-    else
-        len = inFile->read(buffer, MAX_SIZE);
-    if(len == -1)
-        return false;
-    return true;
-}
-
-void MainWin::writeFile(char* buffer)
-{
-    outFile->write(buffer, sizeof(buffer));
-}
-
-//Function to convert unsigned char to string of length 2
-void MainWin::Char2Hex(unsigned char ch, char* szHex)
-{
-    char byte[2];
-    byte[0] = ch/16;
-    byte[1] = ch%16;
-    for(int i=0; i<2; i++)
-    {
-        if(byte[i] >= 0 && byte[i] <= 9)
-            szHex[i] = '0' + byte[i];
-        else
-            szHex[i] = 'A' + byte[i] - 10;
-    }
-    szHex[2] = 0;
-}
-
-//Function to convert string of length 2 to unsigned char
-void MainWin::Hex2Char(char const* szHex, unsigned char& rch)
-{
-    rch = 0;
-    for(int i=0; i<2; i++)
-    {
-        if(*(szHex + i) >='0' && *(szHex + i) <= '9')
-            rch = (rch << 4) + (*(szHex + i) - '0');
-        else if(*(szHex + i) >='A' && *(szHex + i) <= 'F')
-            rch = (rch << 4) + (*(szHex + i) - 'A' + 10);
-        else
-            break;
-    }
-}
-
-//Function to convert string of unsigned chars to string of chars
-void MainWin::CharStr2HexStr(unsigned char const* pucCharStr, char* pszHexStr, int iSize)
-{
-    int i;
-    char szHex[3];
-    pszHexStr[0] = 0;
-    for(i=0; i<iSize; i++)
-    {
-        Char2Hex(pucCharStr[i], szHex);
-        strcat(pszHexStr, szHex);
-    }
-}
-
-//Function to convert string of chars to string of unsigned chars
-void MainWin::HexStr2CharStr(char const* pszHexStr, unsigned char* pucCharStr, int iSize)
-{
-    int i;
-    unsigned char ch;
-    for(i=0; i<iSize; i++)
-    {
-        Hex2Char(pszHexStr+2*i, ch);
-        pucCharStr[i] = ch;
-    }
+    saveName = QFileDialog::getSaveFileName(this, tr("Save file"), "", tr("All Files (*.*);;*.aes;;*.txt")); //选择路径
+    ui->lineEdit_output->setText(saveName);
 }
 
 // comboBox_keyLen中的选项触发的槽函数,保证数据块长度大于密钥；并设置key length
@@ -197,67 +116,338 @@ void MainWin::on_comboBox_blockLen_currentTextChanged(const QString &arg1)
     blockSize = arg1.toInt();   //QString转换为int即可
 }
 
-// 清空input框，为新的输入做准备
-void MainWin::on_Btn_clear_clicked()
+/**
+ * 输入空指针，返回读取文件的内容
+ * @param memblock
+ */
+long MainWin::readFile(char *&memblock, const string &filename)
 {
-    ui->lineEdit_input->clear();
+    /*
+     * 先跳转到文件末尾，然后计算文件长度，重定向文件指针到文件头部，读取整个文件内容
+     */
+    ifstream file(filename, ios::ate);
+    long size = 0;
+    // 读文件
+    if (file.is_open())
+    {
+        size = file.tellg();
+        memblock = new char[size];
+        file.seekg(0, ios::beg);
+        file.read(memblock, size);
+    }
+    file.close();
+    return size;
+}
+
+
+/**
+ * 把加密后的内容写到文件中
+ */
+int MainWin::writeFile(char *content, const string &filename, long size)
+{
+    ofstream file(filename, ios::out | ios::trunc);
+    file.write(content, size + 1);
+//    file << content;  // 如果 content 中出现 ‘\0’ 则不能正常运作
+    file.close();
+    return 0;
+}
+
+
+/**
+ * 加密文件，加密后的内容保存在 out 指针所指向的地方
+ * @return
+ */
+int MainWin::encryptFile(const char *key, char *in, char *out, long size)
+{
+    int keySize = strlen(key);
+    if (keySize != 16 && keySize != 24 && keySize != 32)
+    {
+        QMessageBox::warning(this,tr("密钥错误"),tr("秘钥长度应该为 16 24 或者 32"));
+        return -1;
+    }
+    CRijndael oRijndael;
+    // 设置秘钥
+    oRijndael.MakeKey(key, CRijndael::sm_chain0, keySize, keySize);
+    // size 与 block_size 应该能够互相整除
+    oRijndael.Encrypt(in, out, size, iMode);
+    return 0;
+}
+
+/**
+ * size 长度不包含空字符 '\0'
+ */
+char* MainWin::partitionEncrypt(const char *key, char *in, long size)
+{
+    long keySize = strlen(key);
+    if (size % keySize != 0)
+    {
+        long leftCount = keySize - size % keySize;
+        // 扩展至可以整除块大小
+        auto tmpIn = new char[size + leftCount + 1];
+        auto tmpOut = new char[size + leftCount + 1];
+        // 使用 0 填充后面空余
+        memset(tmpIn + size, 0, leftCount + 1);
+        // 全填充 0
+        memset(tmpOut, 0, size + leftCount + 1);
+        // 复制数组中的内容
+        for (int i = 0; i < size; ++i)
+            tmpIn[i] = in[i];
+        // 加密
+        encryptFile(key, tmpIn, tmpOut, size + leftCount);
+        return tmpOut;
+    } else {
+        auto tmpOut = new char[size + 1];
+        memset(tmpOut, 0, size + 1);
+        encryptFile(key, in, tmpOut, size);
+        return tmpOut;
+    }
+}
+
+/**
+ * 不处理最后一块不能够整除 key 长度的
+ */
+char* MainWin::partitionEncrypt2(const char *key, char *in, long size)
+{
+    long keySize = strlen(key);
+    if (size % keySize != 0) {
+        long leftCount = size - size % keySize;
+        // 扩展至可以整除块大小
+        auto tmpIn = new char[leftCount];
+        auto tmpOut = new char[size];
+        // 全填充 0
+        // 复制数组中的内容
+        for (int i = 0; i < leftCount; ++i) {
+            tmpIn[i] = in[i];
+        }
+        // 加密
+        encryptFile(key, tmpIn, tmpOut, leftCount);
+        // 向 tmpOut 中追加没有被加密的最后一块
+        for (int j = leftCount; j < size; ++j) {
+            tmpOut[j] = in[j];
+        }
+        return tmpOut;
+    } else {
+        auto tmpOut = new char[size + 1];
+        memset(tmpOut, 0, size + 1);
+        encryptFile(key, in, tmpOut, size);
+        return tmpOut;
+    }
+}
+
+
+/**
+ * 解密文件，解密后的内容保存在 out 指针所指向的地方+
+ * @return
+ */
+int MainWin::decryptFile(const char *key, char *in, char *out, long size)
+{
+    int keySize = strlen(key);
+    if (keySize != 16 && keySize != 24 && keySize != 32)
+    {
+        QMessageBox::warning(this,tr("密钥错误"),tr("秘钥长度应该为 16 24 或者 32"));
+        return -1;
+    }
+    CRijndael oRijndael;
+    oRijndael.MakeKey(key, CRijndael::sm_chain0, keySize, keySize);
+    oRijndael.Decrypt(in, out, size, iMode);
+    return 0;
+}
+
+/**
+ * 因为需要解密的块大小不一定能够整除秘钥大小，所以需要做增长处理
+ * @return
+ */
+char* MainWin::partitionDecrypt(const char *key, char *in, long size)
+{
+    long keySize = strlen(key);
+    if (size % keySize != 0)
+    {
+        long addCount = keySize - size % keySize;
+        auto tmpIn = new char[size + addCount + 1];
+        auto tmpOut = new char[size + addCount + 1];
+        memset(tmpIn + size, 0, addCount + 1);
+        memset(tmpOut, 0, size + addCount + 1);
+        // 复制 in 内容到 tmpIn
+        for (int i = 0; i < size; ++i) {
+            tmpIn[i] = in[i];
+        }
+        decryptFile(key, tmpIn, tmpOut, size + addCount);
+        return tmpOut;
+    } else {
+        auto tmpOut = new char[size + 1];
+        memset(tmpOut, 0, size + 1);
+        decryptFile(key, in, tmpOut, size);
+        return tmpOut;
+    }
+}
+
+/**
+ * 直接不处理最后一块不能够整除的长度
+ */
+char* MainWin::partitionDecrypt2(const char *key, char *in, long size)
+{
+    long keySize = strlen(key);
+    if (size % keySize != 0)
+    {
+        long leftCount = size - size % keySize;
+        auto tmpIn = new char[leftCount];
+        auto tmpOut = new char[size];
+        // 复制 in 内容到 tmpIn
+        for (int i = 0; i < leftCount; ++i)
+            tmpIn[i] = in[i];
+        decryptFile(key, tmpIn, tmpOut, leftCount);
+        for (int j = leftCount; j < size; ++j)
+            tmpOut[j] = in[j];
+
+        return tmpOut;
+    } else {
+        auto tmpOut = new char[size + 1];
+        memset(tmpOut, 0, size + 1);
+        decryptFile(key, in, tmpOut, size);
+        return tmpOut;
+    }
+}
+
+/**
+ * @brief 解密函数封装
+ * @param fileToDecrypt
+ * @param saveDecrypt
+ * @param key
+ * @return
+ */
+int MainWin::doDecrypt(string fileToDecrypt, string saveDecrypt, const char *key)
+{
+    char *in;
+    long size = readFile(in, fileToDecrypt);
+    auto out = partitionDecrypt2(key, in, size);
+    writeFile(out, saveDecrypt, size - 1);
+    return 0;
+}
+
+/**
+ * @brief 加密函数封装
+ * @param fileToEncrypt
+ * @param saveEncrypt
+ * @param key
+ * @return
+ */
+int MainWin::doEncrypt(string fileToEncrypt, string saveEncrypt, const char *key)
+{
+    char *in;
+    long size = readFile(in, fileToEncrypt);      // 读取回来的数据，最后一个字符是 '\0'
+    auto out = partitionEncrypt2(key, in, size);
+    writeFile(out, saveEncrypt, size - 1);
+    return 0;
+}
+
+/**
+ * 对比2个加密文档
+ */
+float MainWin::compare(const string &f1, const string &f2)
+{
+    char * content1;
+    char * content2;
+    long s1 = readFile(content1, f1);
+    long s2 = readFile(content2, f2);
+    int m = 0, n = 0;       // n 统计所有 bit 数目, m 统计所有不同 1 的个数
+    char tmp;
+    for (int i = 0; i < s1 && i < s2; ++i)
+    {
+        // 异或运算寻找两个二进制不同位的个数
+        tmp = content1[i] ^ content2[i];
+        // 统计 1 的个数
+        for (int j = 0; j < 8; ++j)
+        {
+            if (tmp & 1)  m += 1;
+            tmp >>= 1;
+        }
+        n += 8;
+    }
+    return (float)m / n;
 }
 
 // 加密
 void MainWin::on_Btn_encrypt_clicked()
 {
-    if(!openFiles())    //打开文件
-    {
-        return;
-    }
-    CRijndael m_Rijndael;         //AES实现对象
-    ui->lineEdit_output->clear();       //清空output框
-    while(readFile(szDataIn))   //读取文件至末尾
-    {
-        memset(szDataOut, 0, inputLen);
-        memset(szHex, 0, 2*inputLen);
-        qDebug()<<szDataIn<<strlen(szHex)<<" "<<blockSize<<" "<<strlen(szDataIn)<<endl;
-
-        try{
-            m_Rijndael.MakeKey(key,CRijndael::sm_chain0,keyLen,blockSize);
-            m_Rijndael.Encrypt(szDataIn,szDataOut,strlen(szDataIn),iMode);
-            //qDebug()<<"szDataOut:"<<szDataOut<<endl;
-            CharStr2HexStr((unsigned char*)szDataOut,szHex,strlen(szDataOut));
-            writeFile(szHex);    //将16进制字符缓冲区写入文件
-        } catch (QString exception) {
-            QMessageBox::warning(this,tr("Warning"),exception);
-        }
-    }
-    outFile->close();
-    ui->lineEdit_output->setText(fileName + ".aes");  //output框显示输出文件
+    getKey();   //获取密钥
+    ui->statusBar->clearMessage();
+    doEncrypt(fileName.toStdString(),saveName.toStdString(),key);
+    ui->statusBar->showMessage(tr("加密完成！"));
 }
 
 // 解密
 void MainWin::on_Btn_decrypt_clicked()
 {
-    if(!openFiles())  //打开文件
+    getKey();   //获取密钥
+    ui->statusBar->clearMessage();
+    doDecrypt(fileName.toStdString(),saveName.toStdString(),key);
+    ui->statusBar->showMessage(tr("解密完成！"));
+}
+
+/**
+ * 文件比对块
+ */
+// import file1
+void MainWin::on_Btn_file1_clicked()
+{
+    fileName = QFileDialog::getOpenFileName(this, tr("Open file"), ".", tr("All Files (*.*)"));  //选择路径
+    if(fileName.length() == 0)
     {
+        QMessageBox::information(NULL, tr("Path"), tr("You didn't select any files."));
         return;
     }
-    CRijndael m_Rijndael;         //AES实现对象
-    ui->lineEdit_output->clear();    //清空output框
-   while(readFile(szHex))
-   {
-       memset(szDataIn, 0, inputLen);
-       memset(szDataOut, 0, inputLen);
-       HexStr2CharStr(szHex,(unsigned char*)szDataIn,strlen(szHex));   //将16进制转化为字符串
-       //qDebug()<<szHex<<endl<<"Hex2Char:"<<szDataIn<<endl;
+    ui->lineEdit_file1->setText(fileName);
+}
 
-       try{
-           m_Rijndael.MakeKey(key,CRijndael::sm_chain0,keyLen,blockSize);
-           m_Rijndael.Decrypt(szDataIn,szDataOut,strlen(szDataIn),iMode);
+// import file2
+void MainWin::on_Btn_file2_clicked()
+{
+    fileName2 = QFileDialog::getOpenFileName(this, tr("Open file"), ".", tr("All Files (*.*)"));  //选择路径
+    if(fileName2.length() == 0)
+    {
+        QMessageBox::information(NULL, tr("Path"), tr("You didn't select any files."));
+        return;
+    }
+    ui->lineEdit_file2->setText(fileName2);
+}
 
-           writeFile(szDataOut);
-       } catch (QString exception) {
-           QMessageBox::warning(this,tr("Warning"),exception);
-       }
-   }
-   outFile->close();
-   fileName.remove(".aes");
-   ui->lineEdit_output->setText(fileName); //output框显示输出文件
+// 显示compare组与否
+void MainWin::on_rBtn_compare_toggled(bool checked)
+{
+    if(checked)
+    {
+        this->maximumHeight();
+        ui->groupBox_compare->show();
+        ui->label_file1->show();
+        ui->label_file2->show();
+        ui->lineEdit_file1->show();
+        ui->lineEdit_file2->show();
+        ui->Btn_compare->show();
+        ui->label_change->show();
+        ui->label_percentage->show();
+    }
+    else
+    {
+        this->minimumHeight();
+        ui->groupBox_compare->hide();
+        ui->label_file1->hide();
+        ui->label_file2->hide();
+        ui->lineEdit_file1->hide();
+        ui->lineEdit_file2->hide();
+        ui->Btn_compare->hide();
+        ui->label_change->hide();
+        ui->label_percentage->hide();
+    }
+}
+
+/**
+ * @brief 比对开始
+ */
+void MainWin::on_Btn_compare_clicked()
+{
+    ui->statusBar->clearMessage();
+    float changes = 100 * compare(fileName.toStdString(),fileName2.toStdString());
+    QString changesStr = QString("%1%").arg(changes);
+    ui->label_percentage->setText(changesStr);
+    ui->statusBar->showMessage(tr("比对完成!"));
 }
